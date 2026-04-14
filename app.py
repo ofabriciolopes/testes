@@ -32,7 +32,7 @@ subcategoria = st.sidebar.selectbox(
 st.subheader(f"📌 {familia} → {subcategoria}")
 
 # =========================
-# 📌 FORMATAÇÃO (PADRÃO ERP)
+# 📌 FORMATAÇÃO
 # =========================
 def fmt_br(valor):
     if pd.isna(valor):
@@ -192,26 +192,29 @@ k3.metric("Trimestre", fmt_br(abs(media_tri)))
 k4.metric("Último mês", fmt_br(abs(media_ult)))
 
 # =========================
-# 📊 EVOLUÇÃO ANUAL (SIMPLIFICADA)
+# 📊 ANOS FECHADOS (CORRIGIDO)
 # =========================
-st.markdown("### 📊 Consumo Médio por Ano (Regra Fixa)")
+st.markdown("### 📊 Consumo Médio por Ano (Anos Fechados)")
 
-df_anos = df_consumo.groupby("ano")["quantidade"].sum().reset_index()
+ano_atual = datetime.today().year
+
+df_anos = df_consumo[df_consumo["ano"] < ano_atual]
+df_anos = df_anos.groupby("ano")["quantidade"].sum().reset_index()
 df_anos = df_anos.sort_values("ano", ascending=False)
 
 if df_anos.empty:
-    st.info("Sem dados para exibir")
+    st.info("Sem anos fechados para exibir")
     st.stop()
 
 for _, row in df_anos.iterrows():
     ano = int(row["ano"])
     total = row["quantidade"]
 
-    media = total / 12
-    media_dia = media / 31
+    media_mensal = total / 12
+    media_dia = media_mensal / 31
 
     c1, c2, c3 = st.columns(3)
 
     c1.metric("Ano", ano)
-    c2.metric("Total", fmt_br(total))
-    c3.metric("Média diária", fmt_br(media_dia))
+    c2.metric("Total do Ano", fmt_br(total))
+    c3.metric("Média diária (12 → 31)", fmt_br(media_dia))
