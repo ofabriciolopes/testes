@@ -40,14 +40,14 @@ def fmt(v):
     return f"{v:,.3f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 # =========================
-# 🚨 SOMENTE TELA CERTA
+# 🚨 FILTRO DE TELA
 # =========================
 if familia != "Matex" or subcategoria != "Médias":
     st.info("Selecione: Famílias → Matex → Médias")
     st.stop()
 
 # =========================
-# 📤 UPLOAD (SIDEBAR CORRETO)
+# 📤 UPLOAD
 # =========================
 arquivo = st.sidebar.file_uploader(
     "Upload do arquivo Excel",
@@ -62,7 +62,6 @@ if not arquivo:
 # 📥 LEITURA
 # =========================
 df = pd.read_excel(arquivo, engine="openpyxl")
-
 df.columns = df.columns.str.strip().str.lower()
 
 def find(cols, keys):
@@ -112,7 +111,7 @@ df["mes"] = df["data"].dt.month
 df["dia"] = df["data"].dt.date
 
 # =========================
-# 🎯 FILTROS (RESPONSIVOS EM LINHA)
+# 🎯 FILTROS RESPONSIVOS
 # =========================
 st.markdown("### 🎯 Filtros")
 
@@ -134,15 +133,26 @@ def mult(col, label):
 
     return pd.Series([True] * len(df))
 
+# 🔥 LINHAS DE FILTROS (RESPONSIVO MANUAL)
+linha1 = st.columns(4)
 
-# 🔥 LAYOUT EM LINHAS (QUEBRA AUTOMÁTICA VISUAL)
-row1 = st.columns(4)
+with linha1[0]:
+    f_material = mult("material", "Material")
+
+with linha1[1]:
+    f_centro = mult("centro", "Centro")
+
+with linha1[2]:
+    f_deposito = mult("deposito", "Depósito")
+
+with linha1[3]:
+    f_movimento = mult("movimento", "Tipo de movimento")
 
 mask = (
-    mult("material", "Material") &
-    mult("centro", "Centro") &
-    mult("deposito", "Depósito") &
-    mult("movimento", "Tipo de movimento")
+    f_material &
+    f_centro &
+    f_deposito &
+    f_movimento
 )
 
 df = df[mask]
@@ -162,22 +172,27 @@ else:
     ano_ult = ano_atual
 
 # =========================
-# 📊 MÉTRICAS
+# 📊 MÉDIAS CORRIGIDAS
 # =========================
 anos = sorted(df["ano"].unique())
 medias_anos = {}
 
 for a in anos:
-    medias_anos[a] = df[df["ano"] == a]["quantidade"].sum() / 12
+    df_a = df[df["ano"] == a]
+    meses = df_a["mes"].nunique()
+    medias_anos[a] = df_a["quantidade"].sum() / meses if meses > 0 else 0
 
 df_sem = df[df["data"] >= pd.Timestamp(hoje) - pd.DateOffset(months=6)]
-media_sem = df_sem["quantidade"].sum() / 6
+meses_sem = df_sem["data"].dt.to_period("M").nunique()
+media_sem = df_sem["quantidade"].sum() / meses_sem if meses_sem > 0 else 0
 
 df_tri = df[df["data"] >= pd.Timestamp(hoje) - pd.DateOffset(months=3)]
-media_tri = df_tri["quantidade"].sum() / 3
+meses_tri = df_tri["data"].dt.to_period("M").nunique()
+media_tri = df_tri["quantidade"].sum() / meses_tri if meses_tri > 0 else 0
 
 df_ult = df[(df["ano"] == ano_ult) & (df["mes"] == mes_ult)]
-media_ult = df_ult["quantidade"].sum() / 31
+dias_ult = df_ult["dia"].nunique()
+media_ult = df_ult["quantidade"].sum() / dias_ult if dias_ult > 0 else 0
 
 df_mes = df[(df["ano"] == ano_atual) & (df["mes"] == mes_atual)]
 dias = df_mes["dia"].nunique()
@@ -206,6 +221,7 @@ df_anos = pd.DataFrame({
     "Consumo médio": list(medias_anos.values())
 }).sort_values("Ano")
 
-df_anos["Consumo médio"] = df_anos["Consumo médio"].apply(fmt)
-
-st.dataframe(df_anos, use_container_width=True)
+st.dataframe(
+    df_anos.style.format({"Consumo médio": "{:,.3f}"}),
+    use_container_width=True
+)
