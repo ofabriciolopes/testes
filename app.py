@@ -32,12 +32,11 @@ subcategoria = st.sidebar.selectbox(
 st.subheader(f"📌 {familia} → {subcategoria}")
 
 # =========================
-# 📌 FORMATAÇÃO (ABS SOMENTE NO FINAL)
+# 📌 FORMATAÇÃO ERP
 # =========================
 def fmt_br(valor):
     if pd.isna(valor):
         return "0,000"
-    valor = abs(valor)  # <-- ABS SOMENTE AQUI (FINAL)
     return f"{valor:,.3f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 # =========================
@@ -153,37 +152,16 @@ df_consumo = df[df["quantidade"] < 0].copy()
 df_consumo["quantidade"] = df_consumo["quantidade"].abs()
 
 # =========================
-# 📊 PERÍODOS
-# =========================
-ano_ult = hoje.year if hoje.month > 1 else hoje.year - 1
-mes_ult = hoje.month - 1 if hoje.month > 1 else 12
-
-df_ult = df[
-    (df["ano"] == ano_ult) &
-    (df["mes"] == mes_ult)
-]
-
-media_ult = df_ult["quantidade"].sum() / 31
-
-df_tri = df_consumo[
-    df_consumo["data"] >= pd.Timestamp(hoje).to_period("M").to_timestamp() - pd.DateOffset(months=3)
-]
-media_tri = df_tri["quantidade"].sum() / (3 * 31)
-
-df_sem = df_consumo[
-    df_consumo["data"] >= pd.Timestamp(hoje).to_period("M").to_timestamp() - pd.DateOffset(months=6)
-]
-media_sem = df_sem["quantidade"].sum() / (6 * 31)
-
-df_ano = df_consumo[
-    df_consumo["data"] >= pd.Timestamp(hoje).to_period("M").to_timestamp() - pd.DateOffset(months=12)
-]
-media_ano = df_ano["quantidade"].sum() / (12 * 31)
-
-# =========================
 # 📊 KPIs
 # =========================
 st.markdown("### 📊 Consumo Médio")
+
+df_ano_base = df_consumo.copy()
+
+media_ult = df_ano_base["quantidade"].sum() / 31
+media_tri = df_ano_base["quantidade"].sum() / 3 / 31
+media_sem = df_ano_base["quantidade"].sum() / 6 / 31
+media_ano = df_ano_base["quantidade"].sum() / 12 / 31
 
 k1, k2, k3, k4 = st.columns(4)
 
@@ -193,13 +171,15 @@ k3.metric("Trimestre", fmt_br(media_tri))
 k4.metric("Último mês", fmt_br(media_ult))
 
 # =========================
-# 📊 ANOS FECHADOS
+# 📊 ANOS FECHADOS (REGRA FINAL)
 # =========================
-st.markdown("### 📊 Consumo Médio por Ano (Anos Fechados)")
+st.markdown("### 📊 Consumo Médio por Ano (Regra Final)")
 
 ano_atual = datetime.today().year
 
-df_anos = df_consumo[df_consumo["ano"] < ano_atual]
+df_anos = df.copy()
+df_anos = df_anos[df_anos["ano"] < ano_atual]
+
 df_anos = df_anos.groupby("ano")["quantidade"].sum().reset_index()
 df_anos = df_anos.sort_values("ano", ascending=False)
 
@@ -212,10 +192,14 @@ for _, row in df_anos.iterrows():
     total = row["quantidade"]
 
     media_mensal = total / 12
-    media_dia = media_mensal / 31
+    media_diaria = media_mensal / 31
+
+    # ABS somente no final (visual)
+    total = abs(total)
+    media_diaria = abs(media_diaria)
 
     c1, c2, c3 = st.columns(3)
 
     c1.metric("Ano", ano)
-    c2.metric("Total do Ano", fmt_br(total))
-    c3.metric("Média diária (12 → 31)", fmt_br(media_dia))
+    c2.metric("Total", fmt_br(total))
+    c3.metric("Média diária (12 → 31)", fmt_br(media_diaria))
