@@ -32,7 +32,7 @@ subcategoria = st.sidebar.selectbox(
 st.subheader(f"📌 {familia} → {subcategoria}")
 
 # =========================
-# 📌 FORMATAÇÃO BR
+# 📌 FORMATAÇÃO
 # =========================
 def fmt(v):
     if pd.isna(v):
@@ -40,7 +40,7 @@ def fmt(v):
     return f"{v:,.3f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 # =========================
-# 🚨 FILTRO DE TELA
+# 🚨 TELA CERTA
 # =========================
 if familia != "Matex" or subcategoria != "Médias":
     st.info("Selecione: Famílias → Matex → Médias")
@@ -49,13 +49,10 @@ if familia != "Matex" or subcategoria != "Médias":
 # =========================
 # 📤 UPLOAD
 # =========================
-arquivo = st.sidebar.file_uploader(
-    "Upload do arquivo Excel",
-    type=["xlsx"]
-)
+arquivo = st.sidebar.file_uploader("Upload do Excel", type=["xlsx"])
 
 if not arquivo:
-    st.warning("Envie o arquivo na barra lateral para continuar")
+    st.warning("Envie o arquivo na barra lateral")
     st.stop()
 
 # =========================
@@ -74,10 +71,7 @@ col_data = find(df.columns, ["data"])
 col_qtd = find(df.columns, ["quant", "qtd"])
 col_material = find(df.columns, ["material", "codigo"])
 col_centro = find(df.columns, ["centro"])
-
-# 🔥 DEPÓSITO MAIS FLEXÍVEL (CORREÇÃO)
-col_deposito = find(df.columns, ["deposito", "dep", "armazen", "storage"])
-
+col_deposito = find(df.columns, ["deposito", "dep", "armazen"])
 col_mov = find(df.columns, ["mov", "tipo"])
 
 if not col_data or not col_qtd:
@@ -113,7 +107,7 @@ df["mes"] = df["data"].dt.month
 df["dia"] = df["data"].dt.date
 
 # =========================
-# 🎯 FILTROS RESPONSIVOS
+# 🎯 FILTROS
 # =========================
 st.markdown("### 🎯 Filtros")
 
@@ -135,24 +129,87 @@ def mult(col, label):
 
     return pd.Series([True] * len(df))
 
-linha1 = st.columns(4)
+c1, c2, c3, c4 = st.columns(4)
 
-with linha1[0]:
+with c1:
     f_material = mult("material", "Material")
 
-with linha1[1]:
+with c2:
     f_centro = mult("centro", "Centro")
 
-with linha1[2]:
-    f_deposito = mult("deposito", "Depósito")  # 🔥 AGORA GARANTIDO
+with c3:
+    f_deposito = mult("deposito", "Depósito")
 
-with linha1[3]:
+with c4:
     f_movimento = mult("movimento", "Tipo de movimento")
 
-mask = f_material & f_centro & f_deposito & f_movimento
-df = df[mask]
+df = df[f_material & f_centro & f_deposito & f_movimento]
 
 # =========================
-# 📊 KPIs (mantido simples)
+# 📊 PERÍODOS
 # =========================
-st.write("Dados carregados:", len(df))
+hoje = datetime.today()
+ano_atual = hoje.year
+mes_atual = hoje.month
+
+if mes_atual == 1:
+    mes_ult = 12
+    ano_ult = ano_atual - 1
+else:
+    mes_ult = mes_atual - 1
+    ano_ult = ano_atual
+
+# =========================
+# 📊 MÉDIAS (CORRIGIDAS)
+# =========================
+anos = sorted(df["ano"].unique())
+medias_anos = {}
+
+for a in anos:
+    df_a = df[df["ano"] == a]
+    meses = df_a["mes"].nunique()
+    medias_anos[a] = df_a["quantidade"].sum() / meses if meses > 0 else 0
+
+df_sem = df[df["data"] >= pd.Timestamp(hoje) - pd.DateOffset(months=6)]
+meses_sem = df_sem["data"].dt.to_period("M").nunique()
+media_sem = df_sem["quantidade"].sum() / meses_sem if meses_sem > 0 else 0
+
+df_tri = df[df["data"] >= pd.Timestamp(hoje) - pd.DateOffset(months=3)]
+meses_tri = df_tri["data"].dt.to_period("M").nunique()
+media_tri = df_tri["quantidade"].sum() / meses_tri if meses_tri > 0 else 0
+
+df_ult = df[(df["ano"] == ano_ult) & (df["mes"] == mes_ult)]
+dias_ult = df_ult["dia"].nunique()
+media_ult = df_ult["quantidade"].sum() / dias_ult if dias_ult > 0 else 0
+
+df_mes = df[(df["ano"] == ano_atual) & (df["mes"] == mes_atual)]
+dias_mes = df_mes["dia"].nunique()
+media_mes = df_mes["quantidade"].sum() / dias_mes if dias_mes > 0 else 0
+
+# =========================
+# 📊 KPIs (AGORA SEMPRE APARECEM ABAIXO DOS FILTROS)
+# =========================
+st.markdown("### 📊 Consumo Médio")
+
+k1, k2, k3, k4, k5 = st.columns(5)
+
+k1.metric("Ano", fmt(medias_anos.get(ano_atual, 0)))
+k2.metric("Semestre", fmt(media_sem))
+k3.metric("Trimestre", fmt(media_tri))
+k4.metric("Último mês", fmt(media_ult))
+k5.metric("Mês atual", fmt(media_mes))
+
+# =========================
+# 📅 TABELA
+# =========================
+st.markdown("### 📅 Médias por Ano")
+
+df_anos = pd.DataFrame({
+    "Ano": list(medias_anos.keys()),
+    "Consumo médio": list(medias_anos.values())
+}).sort_values("Ano")
+
+st.dataframe(
+    df_anos.style.format({"Consumo médio": "{:,.3f}"}),
+    use_container_width=True
+)
