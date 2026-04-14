@@ -152,7 +152,7 @@ df_consumo = df[df["quantidade"] < 0].copy()
 df_consumo["quantidade"] = df_consumo["quantidade"].abs()
 
 # =========================
-# 📊 ÚLTIMO MÊS (FIXO 31)
+# 📊 PERÍODOS
 # =========================
 ano_ult = hoje.year if hoje.month > 1 else hoje.year - 1
 mes_ult = hoje.month - 1 if hoje.month > 1 else 12
@@ -164,31 +164,19 @@ df_ult = df[
 
 media_ult = df_ult["quantidade"].sum() / 31
 
-# =========================
-# 📊 TRIMESTRE (3M / 31)
-# =========================
 df_tri = df_consumo[
     df_consumo["data"] >= pd.Timestamp(hoje).to_period("M").to_timestamp() - pd.DateOffset(months=3)
 ]
-
 media_tri = df_tri["quantidade"].sum() / (3 * 31)
 
-# =========================
-# 📊 SEMESTRE (6M / 31)
-# =========================
 df_sem = df_consumo[
     df_consumo["data"] >= pd.Timestamp(hoje).to_period("M").to_timestamp() - pd.DateOffset(months=6)
 ]
-
 media_sem = df_sem["quantidade"].sum() / (6 * 31)
 
-# =========================
-# 📊 ANO (12M / 31)
-# =========================
 df_ano = df_consumo[
     df_consumo["data"] >= pd.Timestamp(hoje).to_period("M").to_timestamp() - pd.DateOffset(months=12)
 ]
-
 media_ano = df_ano["quantidade"].sum() / (12 * 31)
 
 # =========================
@@ -204,14 +192,20 @@ k3.metric("Trimestre", fmt(abs(media_tri)))
 k4.metric("Último mês", fmt(abs(media_ult)))
 
 # =========================
-# 📅 TABELA ANUAL
+# 📊 VISUAL ANUAL (UX MELHORADO)
 # =========================
-st.markdown("### 📅 (Opcional) Dados Anuais")
+st.markdown("### 📊 Evolução Anual (Dashboard)")
 
 df_anos = df_consumo.groupby("ano")["quantidade"].sum().reset_index()
 df_anos["media"] = df_anos["quantidade"] / (12 * 31)
 
-st.dataframe(
-    df_anos[["ano", "media"]].style.format({"media": "{:,.3f}"}),
-    use_container_width=True
-)
+df_anos = df_anos.sort_values("ano", ascending=False)
+
+cols = st.columns(len(df_anos))
+
+for i, (_, row) in enumerate(df_anos.iterrows()):
+    with cols[i]:
+        st.metric(
+            label=f"{row['ano']}",
+            value=f"{row['media']:.3f}"
+        )
