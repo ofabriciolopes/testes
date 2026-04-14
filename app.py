@@ -4,164 +4,131 @@ from datetime import datetime
 
 st.set_page_config(layout="wide")
 
-st.title("📊 Sistema de Análise de Estoque")
+st.title("📊 Sistema de Gestão de Materiais")
 
 # =========================
-# 📂 CATEGORIA
+# 📂 SIDEBAR - HIERARQUIA
 # =========================
 st.sidebar.title("📁 Navegação")
 
-categoria = st.sidebar.selectbox(
-    "Categoria",
-    [
-        "Matex",
-        "Ingrediente",
-        "Negro de Fumo",
-        "Borracha",
-        "Tecido",
-        "Cordinha",
-        "Importação",
-        "Exportação",
-        "Feira de Santana",
-        "Barueri"
-    ]
-)
+familias = [
+    "Borracha",
+    "Cordinha",
+    "Ingrediente",
+    "Matex",
+    "Negro de Fumo",
+    "Tecido"
+]
 
-# =========================
-# 📂 SUBCATEGORIA
-# =========================
+familia = st.sidebar.selectbox("Famílias", sorted(familias))
+
 subcategorias = {
-    "Matex": ["Médias", "Consumo", "Estoque"],
+    "Matex": ["Manuais", "Médias", "Tarefas"]
 }
 
-subcategoria = st.sidebar.selectbox(
-    "Subcategoria",
-    subcategorias.get(categoria, ["Em breve"])
-)
+subcategoria = None
 
-st.subheader(f"📌 {categoria} → {subcategoria}")
+if familia in subcategorias:
+    subcategoria = st.sidebar.selectbox(
+        "Opções",
+        sorted(subcategorias[familia])
+    )
 
 # =========================
-# 📌 MATEX → MÉDIAS
+# 📌 TELA ATUAL
 # =========================
-if categoria == "Matex" and subcategoria == "Médias":
+if subcategoria:
+    st.subheader(f"📌 {familia} → {subcategoria}")
+else:
+    st.subheader(f"📌 {familia}")
+
+# =========================
+# 📊 MATEX → MÉDIAS
+# =========================
+if familia == "Matex" and subcategoria == "Médias":
 
     arquivo = st.file_uploader("Upload do Excel", type=["xlsx"])
 
     if arquivo:
-        try:
-            df = pd.read_excel(arquivo, engine='openpyxl')
-        except Exception as e:
-            st.error(f"Erro ao ler o arquivo: {e}")
-            st.stop()
+        df = pd.read_excel(arquivo, engine='openpyxl')
 
         # =========================
         # 🔧 PADRONIZAR COLUNAS
         # =========================
         df.columns = df.columns.str.strip().str.lower()
 
-        st.write("🔍 Colunas encontradas:", df.columns)
-
         # =========================
         # 🔎 DETECTAR COLUNAS
         # =========================
-        coluna_data = None
-        coluna_qtd = None
-        coluna_material = None
+        def detectar(colunas, palavras):
+            for col in colunas:
+                if any(p in col for p in palavras):
+                    return col
+            return None
 
-        for col in df.columns:
-            if 'data' in col:
-                coluna_data = col
-            if any(p in col for p in ['quant', 'qtd', 'volume']):
-                coluna_qtd = col
-            if any(p in col for p in ['material', 'codigo', 'produto']):
-                coluna_material = col
+        col_data = detectar(df.columns, ["data"])
+        col_qtd = detectar(df.columns, ["quant", "qtd"])
+        col_material = detectar(df.columns, ["material", "codigo"])
+        col_centro = detectar(df.columns, ["centro"])
+        col_deposito = detectar(df.columns, ["deposito", "dep"])
+        col_mov = detectar(df.columns, ["mov", "tipo"])
 
-        if coluna_data is None or coluna_qtd is None:
-            st.error("❌ Não encontrei colunas de DATA ou QUANTIDADE")
+        if not col_data or not col_qtd:
+            st.error("❌ Necessário ter colunas de Data e Quantidade")
             st.stop()
 
-        # =========================
-        # 🔁 RENOMEAR
-        # =========================
         df = df.rename(columns={
-            coluna_data: 'data',
-            coluna_qtd: 'quantidade'
+            col_data: "data",
+            col_qtd: "quantidade"
         })
 
-        if coluna_material:
-            df = df.rename(columns={coluna_material: 'material'})
+        # =========================
+        # 🧹 TRATAMENTO
+        # =========================
+        df["data"] = pd.to_datetime(df["data"], errors="coerce")
+        df = df.dropna(subset=["data"])
+
+        df["quantidade"] = pd.to_numeric(df["quantidade"], errors="coerce")
+        df = df.dropna(subset=["quantidade"])
+
+        df["quantidade"] = df["quantidade"].abs()
+
+        df["ano"] = df["data"].dt.year
+        df["mes"] = df["data"].dt.month
 
         # =========================
-        # 📅 TRATAR DADOS
-        # =========================
-        df['data'] = pd.to_datetime(df['data'], errors='coerce')
-        df = df.dropna(subset=['data'])
-
-        df['quantidade'] = pd.to_numeric(df['quantidade'], errors='coerce')
-        df = df.dropna(subset=['quantidade'])
-
-        # 🔢 VALORES POSITIVOS
-        df['quantidade'] = df['quantidade'].abs()
-
-        # =========================
-        # 📆 COLUNAS AUXILIARES
-        # =========================
-        df['ano'] = df['data'].dt.year
-        df['mes'] = df['data'].dt.month
-
-        # =========================
-        # 🎯 FILTROS
+        # 🎯 FILTROS (COM BUSCA)
         # =========================
         st.sidebar.markdown("## 🎯 Filtros")
 
-        # 📦 MATERIAL (SEGURANÇA TOTAL)
-        if 'material' in df.columns:
+        def filtro(coluna, nome):
+            if coluna:
+                valores = sorted(df[coluna].astype(str).dropna().unique())
+                selecionados = st.sidebar.multiselect(
+                    nome,
+                    valores,
+                    default=valores
+                )
+                return df[coluna].astype(str).isin(selecionados)
+            return pd.Series([True] * len(df))
 
-            col_material = df['material']
+        mask = (
+            filtro(col_material, "Material") &
+            filtro(col_centro, "Centro") &
+            filtro(col_deposito, "Depósito") &
+            filtro(col_mov, "Tipo Mov.")
+        )
 
-            # Se vier duplicado ou dataframe
-            if isinstance(col_material, pd.DataFrame):
-                col_material = col_material.iloc[:, 0]
-
-            col_material = col_material.astype(str)
-
-            materiais = sorted(col_material.dropna().unique())
-
-            material_sel = st.sidebar.multiselect(
-                "Material",
-                materiais,
-                default=materiais
-            )
-
-            df = df[col_material.isin(material_sel)]
-
-        # 📅 ANO
-        anos = sorted(df['ano'].dropna().unique())
-        ano_sel = st.sidebar.multiselect("Ano", anos, default=anos)
-        df = df[df['ano'].isin(ano_sel)]
-
-        # 📆 MÊS
-        meses = sorted(df['mes'].dropna().unique())
-        mes_sel = st.sidebar.multiselect("Mês", meses, default=meses)
-        df = df[df['mes'].isin(mes_sel)]
+        df = df[mask]
 
         # =========================
-        # 📊 CÁLCULOS
+        # 📊 PERÍODOS
         # =========================
         hoje = datetime.today()
         ano_atual = hoje.year
         mes_atual = hoje.month
 
-        # MÊS CORRENTE
-        df_mes_corrente = df[
-            (df['ano'] == ano_atual) &
-            (df['mes'] == mes_atual)
-        ]
-
-        media_mes_corrente = df_mes_corrente['quantidade'].mean()
-
-        # ÚLTIMO MÊS COMPLETO
+        # Último mês completo
         if mes_atual == 1:
             ultimo_mes = 12
             ano_ultimo_mes = ano_atual - 1
@@ -169,41 +136,77 @@ if categoria == "Matex" and subcategoria == "Médias":
             ultimo_mes = mes_atual - 1
             ano_ultimo_mes = ano_atual
 
-        df_ultimo_mes = df[
-            (df['ano'] == ano_ultimo_mes) &
-            (df['mes'] == ultimo_mes)
+        # Último trimestre (3 meses completos)
+        df_trim = df[
+            (df["data"] < datetime(ano_atual, mes_atual, 1)) &
+            (df["data"] >= pd.Timestamp(datetime(ano_atual, mes_atual, 1)) - pd.DateOffset(months=3))
         ]
 
-        media_ultimo_mes = df_ultimo_mes['quantidade'].mean()
+        # Último semestre (6 meses completos)
+        df_sem = df[
+            (df["data"] < datetime(ano_atual, mes_atual, 1)) &
+            (df["data"] >= pd.Timestamp(datetime(ano_atual, mes_atual, 1)) - pd.DateOffset(months=6))
+        ]
+
+        # Mês corrente
+        df_mes_corrente = df[
+            (df["ano"] == ano_atual) &
+            (df["mes"] == mes_atual)
+        ]
+
+        # Último mês completo
+        df_ult_mes = df[
+            (df["ano"] == ano_ultimo_mes) &
+            (df["mes"] == ultimo_mes)
+        ]
+
+        # =========================
+        # 📊 MÉDIAS
+        # =========================
+        media_mes = df_mes_corrente["quantidade"].mean()
+        media_ult_mes = df_ult_mes["quantidade"].mean()
+        media_trim = df_trim["quantidade"].mean()
+        media_sem = df_sem["quantidade"].mean()
+
+        media_ano = df.groupby("ano")["quantidade"].mean().mean()
+
+        # =========================
+        # 📊 FORMATADOR
+        # =========================
+        def fmt(valor):
+            if pd.isna(valor):
+                return "0"
+            return f"{valor:,.3f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
         # =========================
         # 📊 INDICADORES
         # =========================
-        col1, col2 = st.columns(2)
+        st.markdown("### 📊 Médias")
 
-        col1.metric(
-            "📅 Média mês corrente",
-            f"{media_mes_corrente:,.2f}" if pd.notna(media_mes_corrente) else "0"
-        )
+        col1, col2, col3, col4, col5 = st.columns(5)
 
-        col2.metric(
-            "📆 Último mês completo",
-            f"{media_ultimo_mes:,.2f}" if pd.notna(media_ultimo_mes) else "0"
-        )
+        col1.metric("Ano", fmt(media_ano))
+        col2.metric("Semestre", fmt(media_sem))
+        col3.metric("Trimestre", fmt(media_trim))
+        col4.metric("Último mês", fmt(media_ult_mes))
+        col5.metric("Mês atual", fmt(media_mes))
+
+        # =========================
+        # 📈 TENDÊNCIA
+        # =========================
+        df_group = df.groupby(["ano", "mes"])["quantidade"].mean().reset_index()
+
+        st.markdown("### 📈 Tendência")
+        st.line_chart(df_group["quantidade"])
 
         # =========================
         # 📋 TABELA
         # =========================
-        df_group = df.groupby(['ano', 'mes'])['quantidade'].mean().reset_index()
-
-        st.markdown("### 📋 Média por Mês")
+        st.markdown("### 📋 Dados")
         st.dataframe(df_group, use_container_width=True)
 
 # =========================
-# 📌 OUTRAS TELAS
+# 📌 OUTROS
 # =========================
-elif categoria == "Matex":
-    st.info("🚧 Subcategoria ainda não desenvolvida.")
-
 else:
-    st.info("🚧 Categoria ainda não implementada.")
+    st.info("🚧 Em desenvolvimento")
