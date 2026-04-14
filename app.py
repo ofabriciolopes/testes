@@ -145,26 +145,20 @@ with c4:
 df = df[f_material & f_centro & f_deposito & f_movimento]
 
 # =========================
-# 📊 BASE DE TEMPO
+# 📊 BASE
 # =========================
 hoje = datetime.today()
 
 # =========================
-# 📊 ÚLTIMO MÊS REAL DO DATASET
+# 📊 ÚLTIMO MÊS FECHADO (CORRETO /31)
 # =========================
-df_sorted = df.sort_values("data")
+ano_ult = hoje.year if hoje.month > 1 else hoje.year - 1
+mes_ult = hoje.month - 1 if hoje.month > 1 else 12
 
-ultimo_mes = df_sorted["data"].dt.to_period("M").max()
-df_ult = df_sorted[df_sorted["data"].dt.to_period("M") == ultimo_mes]
+df_ult = df[(df["ano"] == ano_ult) & (df["mes"] == mes_ult)]
 
-media_ult = df_ult["quantidade"].sum() / 31
-
-# =========================
-# 📊 MÊS ATUAL
-# =========================
-df_mes = df_sorted[df_sorted["data"].dt.to_period("M") == hoje.strftime("%Y-%m")]
-
-media_mes = df_mes["quantidade"].sum() / 31
+total_ult = df_ult["quantidade"].sum()
+media_ult = total_ult / 31
 
 # =========================
 # 📊 TRIMESTRE E SEMESTRE
@@ -190,13 +184,12 @@ for a in anos:
 # =========================
 st.markdown("### 📊 Consumo Médio")
 
-k1, k2, k3, k4, k5 = st.columns(5)
+k1, k2, k3, k4 = st.columns(4)
 
 k1.metric("Ano", fmt(medias_anos.get(hoje.year, 0)))
 k2.metric("Semestre", fmt(media_sem))
 k3.metric("Trimestre", fmt(media_tri))
 k4.metric("Último mês", fmt(media_ult))
-k5.metric("Mês atual", fmt(media_mes))
 
 # =========================
 # 📅 TABELA ANUAL
@@ -212,9 +205,3 @@ st.dataframe(
     df_anos.style.format({"Consumo médio": "{:,.3f}"}),
     use_container_width=True
 )
-
-# =========================
-# 🔍 DEBUG (opcional)
-# =========================
-st.write("Último mês detectado:", ultimo_mes)
-st.write("Total último mês:", df_ult["quantidade"].sum())
