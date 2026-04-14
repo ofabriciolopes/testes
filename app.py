@@ -7,16 +7,6 @@ st.set_page_config(layout="wide")
 st.title("📊 Sistema de Gestão de Materiais")
 
 # =========================
-# 📂 SIDEBAR - UPLOAD (NOVO FLUXO)
-# =========================
-st.sidebar.title("📁 Controle")
-
-arquivo = st.sidebar.file_uploader(
-    "Upload do Excel",
-    type=["xlsx"]
-)
-
-# =========================
 # 📂 SIDEBAR - HIERARQUIA
 # =========================
 familias = sorted([
@@ -50,14 +40,28 @@ def fmt(v):
     return f"{v:,.3f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 # =========================
-# 🚨 SEM ARQUIVO
+# 🚨 SOMENTE ESSA TELA
 # =========================
-if not arquivo:
-    st.info("📤 Faça upload de um arquivo na barra lateral para começar")
+if familia != "Matex" or subcategoria != "Médias":
+    st.info("Selecione: Famílias → Matex → Médias")
     st.stop()
 
 # =========================
-# 📥 LEITURA
+# 📥 UPLOAD (SÓ AQUI)
+# =========================
+st.markdown("### 📤 Upload de Dados")
+
+arquivo = st.file_uploader(
+    "Envie o arquivo Excel",
+    type=["xlsx"]
+)
+
+if not arquivo:
+    st.warning("Envie um arquivo para continuar")
+    st.stop()
+
+# =========================
+# 📊 LEITURA
 # =========================
 df = pd.read_excel(arquivo, engine="openpyxl")
 
@@ -178,7 +182,7 @@ dias = df_mes["dia"].nunique()
 media_mes = df_mes["quantidade"].sum() / dias if dias > 0 else 0
 
 # =========================
-# 📊 UI
+# 📊 KPIs
 # =========================
 st.markdown("### 📊 Consumo Médio")
 
