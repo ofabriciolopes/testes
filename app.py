@@ -40,28 +40,26 @@ def fmt(v):
     return f"{v:,.3f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 # =========================
-# 🚨 SOMENTE ESSA TELA
+# 🚨 SOMENTE TELA CERTA
 # =========================
 if familia != "Matex" or subcategoria != "Médias":
     st.info("Selecione: Famílias → Matex → Médias")
     st.stop()
 
 # =========================
-# 📥 UPLOAD (SÓ AQUI)
+# 📤 UPLOAD (SIDEBAR CORRETO)
 # =========================
-st.markdown("### 📤 Upload de Dados")
-
-arquivo = st.file_uploader(
-    "Envie o arquivo Excel",
+arquivo = st.sidebar.file_uploader(
+    "Upload do arquivo Excel",
     type=["xlsx"]
 )
 
 if not arquivo:
-    st.warning("Envie um arquivo para continuar")
+    st.warning("Envie o arquivo na barra lateral para continuar")
     st.stop()
 
 # =========================
-# 📊 LEITURA
+# 📥 LEITURA
 # =========================
 df = pd.read_excel(arquivo, engine="openpyxl")
 
@@ -114,11 +112,11 @@ df["mes"] = df["data"].dt.month
 df["dia"] = df["data"].dt.date
 
 # =========================
-# 🎯 FILTROS (CORPO)
+# 🎯 FILTROS (RESPONSIVOS EM LINHA)
 # =========================
 st.markdown("### 🎯 Filtros")
 
-def filtro(col, label):
+def mult(col, label):
     if col and col in df.columns:
         valores = sorted(df[col].astype(str).dropna().unique())
 
@@ -136,11 +134,15 @@ def filtro(col, label):
 
     return pd.Series([True] * len(df))
 
+
+# 🔥 LAYOUT EM LINHAS (QUEBRA AUTOMÁTICA VISUAL)
+row1 = st.columns(4)
+
 mask = (
-    filtro("material", "Material") &
-    filtro("centro", "Centro") &
-    filtro("deposito", "Depósito") &
-    filtro("movimento", "Tipo de movimento")
+    mult("material", "Material") &
+    mult("centro", "Centro") &
+    mult("deposito", "Depósito") &
+    mult("movimento", "Tipo de movimento")
 )
 
 df = df[mask]
