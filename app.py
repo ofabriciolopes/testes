@@ -7,7 +7,7 @@ st.set_page_config(layout="wide")
 st.title("📊 Sistema de Gestão de Materiais")
 
 # =========================
-# 📂 SIDEBAR
+# 📂 SIDEBAR - HIERARQUIA
 # =========================
 familias = sorted([
     "Borracha",
@@ -32,7 +32,7 @@ subcategoria = st.sidebar.selectbox(
 st.subheader(f"📌 {familia} → {subcategoria}")
 
 # =========================
-# 📌 FUNÇÃO FORMATAÇÃO BR
+# 📌 FORMATAÇÃO BR
 # =========================
 def fmt(v):
     if pd.isna(v):
@@ -50,6 +50,9 @@ if familia == "Matex" and subcategoria == "Médias":
 
         df = pd.read_excel(arquivo, engine="openpyxl")
 
+        # =========================
+        # 🔧 PADRONIZAÇÃO
+        # =========================
         df.columns = df.columns.str.strip().str.lower()
 
         def find(cols, keys):
@@ -65,6 +68,10 @@ if familia == "Matex" and subcategoria == "Médias":
         col_deposito = find(df.columns, ["deposito"])
         col_mov = find(df.columns, ["mov", "tipo"])
 
+        if not col_data or not col_qtd:
+            st.error("❌ Colunas obrigatórias não encontradas")
+            st.stop()
+
         df = df.rename(columns={
             col_data: "data",
             col_qtd: "quantidade"
@@ -79,6 +86,9 @@ if familia == "Matex" and subcategoria == "Médias":
         if col_mov:
             df = df.rename(columns={col_mov: "movimento"})
 
+        # =========================
+        # 🧹 TRATAMENTO
+        # =========================
         df["data"] = pd.to_datetime(df["data"], errors="coerce")
         df = df.dropna(subset=["data"])
 
@@ -92,18 +102,15 @@ if familia == "Matex" and subcategoria == "Médias":
         df["dia"] = df["data"].dt.date
 
         # =========================
-        # 🎯 FILTROS LIMPOS (TOPO)
+        # 🎯 FILTROS (VERTICAL)
         # =========================
         st.markdown("### 🎯 Filtros")
 
-        f1, f2, f3, f4 = st.columns(4)
-
-        def filtro(col, label, container):
+        def filtro(col, label):
             if col and col in df.columns:
                 valores = sorted(df[col].astype(str).dropna().unique())
 
-                # 🔥 UX MELHOR: não selecionar tudo automaticamente
-                selecionados = container.multiselect(
+                selecionados = st.multiselect(
                     label,
                     options=valores,
                     default=None,
@@ -118,16 +125,16 @@ if familia == "Matex" and subcategoria == "Médias":
             return pd.Series([True] * len(df))
 
         mask = (
-            filtro("material", "Material", f1) &
-            filtro("centro", "Centro", f2) &
-            filtro("deposito", "Depósito", f3) &
-            filtro("movimento", "Movimento", f4)
+            filtro("material", "Material") &
+            filtro("centro", "Centro") &
+            filtro("deposito", "Depósito") &
+            filtro("movimento", "Tipo de movimento")
         )
 
         df = df[mask]
 
         # =========================
-        # 📊 PERÍODOS
+        # 📅 BASE DE TEMPO
         # =========================
         hoje = datetime.today()
         ano_atual = hoje.year
@@ -141,10 +148,8 @@ if familia == "Matex" and subcategoria == "Médias":
             ano_ult = ano_atual
 
         # =========================
-        # 📊 MÉDIAS
+        # 📊 ANOS
         # =========================
-
-        # ANOS
         anos = sorted(df["ano"].unique())
         medias_anos = {}
 
@@ -152,25 +157,33 @@ if familia == "Matex" and subcategoria == "Médias":
             total = df[df["ano"] == a]["quantidade"].sum()
             medias_anos[a] = total / 12
 
-        # SEMESTRE
+        # =========================
+        # 📊 SEMESTRE
+        # =========================
         df_sem = df[df["data"] >= pd.Timestamp(hoje) - pd.DateOffset(months=6)]
         media_sem = df_sem["quantidade"].sum() / 6
 
-        # TRIMESTRE
+        # =========================
+        # 📊 TRIMESTRE
+        # =========================
         df_tri = df[df["data"] >= pd.Timestamp(hoje) - pd.DateOffset(months=3)]
         media_tri = df_tri["quantidade"].sum() / 3
 
-        # ÚLTIMO MÊS
+        # =========================
+        # 📊 ÚLTIMO MÊS
+        # =========================
         df_ult = df[(df["ano"] == ano_ult) & (df["mes"] == mes_ult)]
-        media_ult = df_ult["quantidade"].sum()
+        media_ult = df_ult["quantidade"].sum() / 31
 
-        # MÊS ATUAL
+        # =========================
+        # 📊 MÊS ATUAL
+        # =========================
         df_mes = df[(df["ano"] == ano_atual) & (df["mes"] == mes_atual)]
         dias = df_mes["dia"].nunique()
         media_mes = df_mes["quantidade"].sum() / dias if dias > 0 else 0
 
         # =========================
-        # 📊 UI
+        # 📊 KPIs
         # =========================
         st.markdown("### 📊 Consumo Médio")
 
@@ -185,7 +198,7 @@ if familia == "Matex" and subcategoria == "Médias":
         # =========================
         # 📅 TABELA ANOS
         # =========================
-        st.markdown("### 📅 Histórico por Ano")
+        st.markdown("### 📅 Médias por Ano")
 
         df_anos = pd.DataFrame({
             "Ano": list(medias_anos.keys()),
