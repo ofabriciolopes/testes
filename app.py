@@ -32,11 +32,12 @@ subcategoria = st.sidebar.selectbox(
 st.subheader(f"📌 {familia} → {subcategoria}")
 
 # =========================
-# 📌 FORMATAÇÃO
+# 📌 FORMATAÇÃO (ABS SOMENTE NO FINAL)
 # =========================
 def fmt_br(valor):
     if pd.isna(valor):
         return "0,000"
+    valor = abs(valor)  # <-- ABS SOMENTE AQUI (FINAL)
     return f"{valor:,.3f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 # =========================
@@ -186,13 +187,13 @@ st.markdown("### 📊 Consumo Médio")
 
 k1, k2, k3, k4 = st.columns(4)
 
-k1.metric("Ano", fmt_br(abs(media_ano)))
-k2.metric("Semestre", fmt_br(abs(media_sem)))
-k3.metric("Trimestre", fmt_br(abs(media_tri)))
-k4.metric("Último mês", fmt_br(abs(media_ult)))
+k1.metric("Ano", fmt_br(media_ano))
+k2.metric("Semestre", fmt_br(media_sem))
+k3.metric("Trimestre", fmt_br(media_tri))
+k4.metric("Último mês", fmt_br(media_ult))
 
 # =========================
-# 📊 ANOS FECHADOS (CORRIGIDO)
+# 📊 ANOS FECHADOS
 # =========================
 st.markdown("### 📊 Consumo Médio por Ano (Anos Fechados)")
 
