@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 
 st.set_page_config(layout="wide")
-st.title("📊 Análise de Movimentações de Estoque")
+st.title("📊 Médias")
 
 arquivo = st.file_uploader("Upload do Excel", type=["xlsx"])
 
