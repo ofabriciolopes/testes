@@ -49,14 +49,22 @@ if categoria == "Matex" and subcategoria == "Médias":
     arquivo = st.file_uploader("Upload do Excel", type=["xlsx"])
 
     if arquivo:
-        df = pd.read_excel(arquivo, engine='openpyxl')
+        try:
+            df = pd.read_excel(arquivo, engine='openpyxl')
+        except Exception as e:
+            st.error(f"Erro ao ler o arquivo: {e}")
+            st.stop()
 
         # =========================
         # 🔧 PADRONIZAR COLUNAS
         # =========================
         df.columns = df.columns.str.strip().str.lower()
 
-        # Detectar colunas
+        st.write("🔍 Colunas encontradas:", df.columns)
+
+        # =========================
+        # 🔎 DETECTAR COLUNAS
+        # =========================
         coluna_data = None
         coluna_qtd = None
         coluna_material = None
@@ -64,15 +72,18 @@ if categoria == "Matex" and subcategoria == "Médias":
         for col in df.columns:
             if 'data' in col:
                 coluna_data = col
-            if 'quant' in col or 'qtd' in col:
+            if any(p in col for p in ['quant', 'qtd', 'volume']):
                 coluna_qtd = col
-            if 'material' in col:
+            if any(p in col for p in ['material', 'codigo', 'produto']):
                 coluna_material = col
 
         if coluna_data is None or coluna_qtd is None:
-            st.error("❌ Não encontrei colunas de data ou quantidade")
+            st.error("❌ Não encontrei colunas de DATA ou QUANTIDADE")
             st.stop()
 
+        # =========================
+        # 🔁 RENOMEAR
+        # =========================
         df = df.rename(columns={
             coluna_data: 'data',
             coluna_qtd: 'quantidade'
@@ -90,8 +101,12 @@ if categoria == "Matex" and subcategoria == "Médias":
         df['quantidade'] = pd.to_numeric(df['quantidade'], errors='coerce')
         df = df.dropna(subset=['quantidade'])
 
+        # 🔢 VALORES POSITIVOS
         df['quantidade'] = df['quantidade'].abs()
 
+        # =========================
+        # 📆 COLUNAS AUXILIARES
+        # =========================
         df['ano'] = df['data'].dt.year
         df['mes'] = df['data'].dt.month
 
@@ -100,32 +115,35 @@ if categoria == "Matex" and subcategoria == "Médias":
         # =========================
         st.sidebar.markdown("## 🎯 Filtros")
 
-        # 📦 Filtro Material
+        # 📦 MATERIAL (SEGURANÇA TOTAL)
         if 'material' in df.columns:
-            materiais = sorted(df['material'].dropna().unique())
+
+            col_material = df['material']
+
+            # Se vier duplicado ou dataframe
+            if isinstance(col_material, pd.DataFrame):
+                col_material = col_material.iloc[:, 0]
+
+            col_material = col_material.astype(str)
+
+            materiais = sorted(col_material.dropna().unique())
+
             material_sel = st.sidebar.multiselect(
                 "Material",
                 materiais,
                 default=materiais
             )
-            df = df[df['material'].isin(material_sel)]
 
-        # 📅 Filtro Ano
-        anos = sorted(df['ano'].unique())
-        ano_sel = st.sidebar.multiselect(
-            "Ano",
-            anos,
-            default=anos
-        )
+            df = df[col_material.isin(material_sel)]
+
+        # 📅 ANO
+        anos = sorted(df['ano'].dropna().unique())
+        ano_sel = st.sidebar.multiselect("Ano", anos, default=anos)
         df = df[df['ano'].isin(ano_sel)]
 
-        # 📆 Filtro Mês
-        meses = sorted(df['mes'].unique())
-        mes_sel = st.sidebar.multiselect(
-            "Mês",
-            meses,
-            default=meses
-        )
+        # 📆 MÊS
+        meses = sorted(df['mes'].dropna().unique())
+        mes_sel = st.sidebar.multiselect("Mês", meses, default=meses)
         df = df[df['mes'].isin(mes_sel)]
 
         # =========================
@@ -135,14 +153,15 @@ if categoria == "Matex" and subcategoria == "Médias":
         ano_atual = hoje.year
         mes_atual = hoje.month
 
-        # Mês corrente
+        # MÊS CORRENTE
         df_mes_corrente = df[
             (df['ano'] == ano_atual) &
             (df['mes'] == mes_atual)
         ]
+
         media_mes_corrente = df_mes_corrente['quantidade'].mean()
 
-        # Último mês completo
+        # ÚLTIMO MÊS COMPLETO
         if mes_atual == 1:
             ultimo_mes = 12
             ano_ultimo_mes = ano_atual - 1
@@ -154,15 +173,23 @@ if categoria == "Matex" and subcategoria == "Médias":
             (df['ano'] == ano_ultimo_mes) &
             (df['mes'] == ultimo_mes)
         ]
+
         media_ultimo_mes = df_ultimo_mes['quantidade'].mean()
 
         # =========================
-        # 📊 UI
+        # 📊 INDICADORES
         # =========================
         col1, col2 = st.columns(2)
 
-        col1.metric("📅 Média mês corrente", f"{media_mes_corrente:,.2f}")
-        col2.metric("📆 Último mês completo", f"{media_ultimo_mes:,.2f}")
+        col1.metric(
+            "📅 Média mês corrente",
+            f"{media_mes_corrente:,.2f}" if pd.notna(media_mes_corrente) else "0"
+        )
+
+        col2.metric(
+            "📆 Último mês completo",
+            f"{media_ultimo_mes:,.2f}" if pd.notna(media_ultimo_mes) else "0"
+        )
 
         # =========================
         # 📋 TABELA
@@ -171,3 +198,12 @@ if categoria == "Matex" and subcategoria == "Médias":
 
         st.markdown("### 📋 Média por Mês")
         st.dataframe(df_group, use_container_width=True)
+
+# =========================
+# 📌 OUTRAS TELAS
+# =========================
+elif categoria == "Matex":
+    st.info("🚧 Subcategoria ainda não desenvolvida.")
+
+else:
+    st.info("🚧 Categoria ainda não implementada.")
