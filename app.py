@@ -101,9 +101,6 @@ df = df.dropna(subset=["data"])
 df["quantidade"] = pd.to_numeric(df["quantidade"], errors="coerce")
 df = df.dropna(subset=["quantidade"])
 
-# 🚨 IMPORTANTE: NÃO usar abs()
-# Agora respeita entrada (+) e saída (-)
-
 df["ano"] = df["data"].dt.year
 df["mes"] = df["data"].dt.month
 
@@ -163,21 +160,23 @@ df_consumo["quantidade"] = df_consumo["quantidade"].abs()
 ano_ult = hoje.year if hoje.month > 1 else hoje.year - 1
 mes_ult = hoje.month - 1 if hoje.month > 1 else 12
 
-df_ult = df_consumo[
-    (df_consumo["ano"] == ano_ult) &
-    (df_consumo["mes"] == mes_ult)
+df_ult = df[
+    (df["ano"] == ano_ult) &
+    (df["mes"] == mes_ult)
 ]
 
 total_ult = df_ult["quantidade"].sum()
+
+# média fixa por 31 dias
 media_ult = total_ult / 31
 
 # =========================
 # 📊 TRIMESTRE E SEMESTRE
 # =========================
-df_tri = df_consumo[df_consumo["data"] >= pd.Timestamp(hoje) - pd.DateOffset(months=3)]
+df_tri = df_consumo[df_consumo["data"] >= pd.Timestamp(hoje).to_period("M").to_timestamp() - pd.DateOffset(months=3)]
 media_tri = df_tri["quantidade"].sum() / 3
 
-df_sem = df_consumo[df_consumo["data"] >= pd.Timestamp(hoje) - pd.DateOffset(months=6)]
+df_sem = df_consumo[df_consumo["data"] >= pd.Timestamp(hoje).to_period("M").to_timestamp() - pd.DateOffset(months=6)]
 media_sem = df_sem["quantidade"].sum() / 6
 
 # =========================
@@ -188,7 +187,8 @@ medias_anos = {}
 
 for a in anos:
     df_a = df_consumo[df_consumo["ano"] == a]
-    medias_anos[a] = df_a["quantidade"].sum() / 12
+    meses_validos = df_a["mes"].nunique()
+    medias_anos[a] = df_a["quantidade"].sum() / meses_validos if meses_validos else 0
 
 # =========================
 # 📊 KPIs
@@ -198,9 +198,9 @@ st.markdown("### 📊 Consumo Médio")
 k1, k2, k3, k4 = st.columns(4)
 
 k1.metric("Ano", fmt(medias_anos.get(hoje.year, 0)))
-k2.metric("Semestre", fmt(media_sem))
-k3.metric("Trimestre", fmt(media_tri))
-k4.metric("Último mês", fmt(media_ult))
+k2.metric("Semestre", fmt(abs(media_sem)))
+k3.metric("Trimestre", fmt(abs(media_tri)))
+k4.metric("Último mês", fmt(abs(media_ult)))
 
 # =========================
 # 📅 TABELA ANUAL
