@@ -1,176 +1,119 @@
 import streamlit as st
 import pandas as pd
+from datetime import datetime
 
 st.set_page_config(layout="wide")
-st.title("📊 Médias (consumo)")
 
+st.title("📊 Análise de Movimentações de Estoque")
+
+# =========================
+# 📂 MENU LATERAL (GUIAS)
+# =========================
+st.sidebar.title("📁 Categorias")
+
+abas = [
+    "Matex",
+    "Ingrediente",
+    "Negro de Fumo",
+    "Borracha",
+    "Tecido",
+    "Cordinha",
+    "Importação",
+    "Exportação",
+    "Feira de Santana",
+    "Barueri"
+]
+
+aba_selecionada = st.sidebar.radio("Selecione a área:", abas)
+
+st.subheader(f"📌 Área selecionada: {aba_selecionada}")
+
+# =========================
+# 📥 UPLOAD
+# =========================
 arquivo = st.file_uploader("Upload do Excel", type=["xlsx"])
 
 if arquivo:
-    df = pd.read_excel(arquivo)
+    df = pd.read_excel(arquivo, engine='openpyxl')
 
     # =========================
-    # RENOMEAR COLUNAS
+    # 🔧 AJUSTE DE COLUNAS
     # =========================
     df = df.rename(columns={
         'Material': 'material',
-        'Tipo de movimento': 'tipo_mov',
-        'Data de lançamento': 'data',
-        'Depósito': 'deposito',
-        'Centro': 'planta',
-        'Qtd.  UM registro': 'quantidade'
+        'Quantidade': 'quantidade',
+        'Data': 'data'
     })
 
     # =========================
-    # TRATAMENTO
+    # 📅 TRATAR DATA
     # =========================
-    df['data'] = pd.to_datetime(df['data'], errors='coerce')
-    df = df.dropna(subset=['data'])
-    df['quantidade'] = pd.to_numeric(df['quantidade'], errors='coerce')
+    df['data'] = pd.to_datetime(df['data'])
 
+    # =========================
+    # 🔢 VALORES POSITIVOS
+    # =========================
+    df['quantidade'] = df['quantidade'].abs()
+
+    # =========================
+    # 📆 COLUNAS AUXILIARES
+    # =========================
     df['ano'] = df['data'].dt.year
     df['mes'] = df['data'].dt.month
 
-    # =========================
-    # FILTROS
-    # =========================
-    st.sidebar.header("Filtros")
-
-    material = st.sidebar.text_input("Material")
-
-    deposito = st.sidebar.multiselect("Depósito", sorted(df['deposito'].dropna().unique()))
-    planta = st.sidebar.multiselect("Planta", sorted(df['planta'].dropna().unique()))
-    tipo_mov = st.sidebar.multiselect("Tipo Mov.", sorted(df['tipo_mov'].dropna().unique()))
-
-    df_filtrado = df.copy()
-
-    if material:
-        df_filtrado = df_filtrado[df_filtrado['material'].astype(str).str.contains(material, case=False)]
-
-    if deposito:
-        df_filtrado = df_filtrado[df_filtrado['deposito'].isin(deposito)]
-
-    if planta:
-        df_filtrado = df_filtrado[df_filtrado['planta'].isin(planta)]
-
-    if tipo_mov:
-        df_filtrado = df_filtrado[df_filtrado['tipo_mov'].isin(tipo_mov)]
+    hoje = datetime.today()
+    ano_atual = hoje.year
+    mes_atual = hoje.month
 
     # =========================
-    # BASE MENSAL
+    # 📊 MÉDIA MÊS CORRENTE
     # =========================
-    mensal = df_filtrado.groupby(['material', 'ano', 'mes']).agg(
-        total=('quantidade', 'sum'),
-        dias=('data', lambda x: x.dt.daysinmonth.iloc[0])
-    ).reset_index()
-
-    mensal['media_dia'] = mensal['total'] / mensal['dias']
-
-    # remover mês atual
-    hoje = pd.Timestamp.today()
-    ultimo_mes = hoje.replace(day=1) - pd.Timedelta(days=1)
-
-    mensal = mensal[
-        (mensal['ano'] < ultimo_mes.year) |
-        ((mensal['ano'] == ultimo_mes.year) & (mensal['mes'] <= ultimo_mes.month))
+    df_mes_corrente = df[
+        (df['ano'] == ano_atual) &
+        (df['mes'] == mes_atual)
     ]
 
-    mensal = mensal.sort_values(['material', 'ano', 'mes'])
-
-    mensal['data_ref'] = pd.to_datetime(
-        mensal['ano'].astype(str) + '-' + mensal['mes'].astype(str) + '-01'
-    )
+    media_mes_corrente = df_mes_corrente['quantidade'].mean()
 
     # =========================
-    # MÉDIAS
+    # 📊 MÉDIA ÚLTIMO MÊS COMPLETO
     # =========================
+    if mes_atual == 1:
+        ultimo_mes = 12
+        ano_ultimo_mes = ano_atual - 1
+    else:
+        ultimo_mes = mes_atual - 1
+        ano_ultimo_mes = ano_atual
 
-    # anual
-    anual = mensal.groupby(['material', 'ano'])['media_dia'].mean().reset_index()
-    anual_final = anual.sort_values('ano').groupby('material').tail(1)
+    df_ultimo_mes = df[
+        (df['ano'] == ano_ultimo_mes) &
+        (df['mes'] == ultimo_mes)
+    ]
 
-    # rolling
-    mensal['media_3m'] = mensal.groupby('material')['media_dia'].transform(lambda x: x.rolling(3).mean())
-    mensal['media_6m'] = mensal.groupby('material')['media_dia'].transform(lambda x: x.rolling(6).mean())
-    mensal['media_12m'] = mensal.groupby('material')['media_dia'].transform(lambda x: x.rolling(12).mean())
-
-    trimestral = mensal.dropna(subset=['media_3m']).groupby('material').tail(1)[['material', 'media_3m']]
-    semestral = mensal.dropna(subset=['media_6m']).groupby('material').tail(1)[['material', 'media_6m']]
-    mensal_final = mensal.dropna(subset=['media_12m']).groupby('material').tail(1)[['material', 'media_12m']]
-
-    # =========================
-    # TABELA FINAL
-    # =========================
-    df_final = anual_final[['material', 'media_dia']].rename(columns={'media_dia': 'Anual'})
-
-    df_final = df_final.merge(trimestral, on='material', how='left')
-    df_final = df_final.merge(semestral, on='material', how='left')
-    df_final = df_final.merge(mensal_final, on='material', how='left')
-
-    df_final = df_final.rename(columns={
-        'media_3m': '3M',
-        'media_6m': '6M',
-        'media_12m': '12M'
-    })
+    media_ultimo_mes = df_ultimo_mes['quantidade'].mean()
 
     # =========================
-    # FORMATAÇÃO
+    # 📊 VISÃO GERAL
     # =========================
-    def formatar(valor):
-        try:
-            return f"{valor:,.3f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        except:
-            return ""
+    st.markdown("### 📊 Indicadores")
 
-    for col in ['Anual', '3M', '6M', '12M']:
-        df_final[col] = df_final[col].apply(formatar)
+    col1, col2 = st.columns(2)
+
+    col1.metric("📅 Média mês corrente", f"{media_mes_corrente:,.2f}")
+    col2.metric("📆 Média último mês completo", f"{media_ultimo_mes:,.2f}")
 
     # =========================
-    # KPIs
+    # 📊 AGRUPAMENTO MENSAL
     # =========================
-    st.subheader("📌 Resumo")
+    df_group = df.groupby(['ano', 'mes'])['quantidade'].mean().reset_index()
 
-    col1, col2, col3 = st.columns(3)
-
-    col1.metric("Materiais", df_final['material'].nunique())
-
-    col2.metric("Média 12M",
-        round(pd.to_numeric(df_final['12M'].str.replace('.', '').str.replace(',', '.'), errors='coerce').mean(), 2)
-    )
-
-    col3.metric("Média 3M",
-        round(pd.to_numeric(df_final['3M'].str.replace('.', '').str.replace(',', '.'), errors='coerce').mean(), 2)
-    )
+    df_group = df_group.sort_values(['ano', 'mes'])
 
     # =========================
-    # TABELA
+    # ➕ ADICIONAR COLUNAS FIXAS
     # =========================
-    st.subheader("📊 Consumo por Material")
+    df_group['media_mes_corrente'] = media_mes_corrente
+    df_group['media_ultimo_mes'] = media_ultimo_mes
 
-    df_final = df_final.sort_values(by='12M', ascending=False)
-
-    st.dataframe(df_final, use_container_width=True)
-
-    # =========================
-    # GRÁFICO
-    # =========================
-    st.subheader("📈 Tendência de Consumo")
-
-    material_select = st.selectbox("Selecione o material", df_final['material'].unique())
-
-    grafico = mensal[mensal['material'] == material_select]
-
-    st.line_chart(grafico.set_index('data_ref')['media_dia'])
-
-    # =========================
-    # EXPORTAR
-    # =========================
-    st.download_button(
-        "📥 Baixar dados filtrados",
-        df_filtrado.to_csv(index=False).encode('utf-8'),
-        "dados_filtrados.csv",
-        "text/csv"
-    )
-
-else:
-    st.info("Faça upload do seu arquivo XLSX")
+    st.markdown("### 📋 Tabela de Médias")
+    st.dataframe(df_group, use_container_width=True)
