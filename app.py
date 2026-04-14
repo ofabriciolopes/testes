@@ -100,7 +100,9 @@ df = df.dropna(subset=["data"])
 
 df["quantidade"] = pd.to_numeric(df["quantidade"], errors="coerce")
 df = df.dropna(subset=["quantidade"])
-df["quantidade"] = df["quantidade"].abs()
+
+# 🚨 IMPORTANTE: NÃO usar abs()
+# Agora respeita entrada (+) e saída (-)
 
 df["ano"] = df["data"].dt.year
 df["mes"] = df["data"].dt.month
@@ -150,12 +152,21 @@ df = df[f_material & f_centro & f_deposito & f_movimento]
 hoje = datetime.today()
 
 # =========================
-# 📊 ÚLTIMO MÊS FECHADO (CORRETO /31)
+# 📊 CONSUMO REAL (SAÍDAS)
+# =========================
+df_consumo = df[df["quantidade"] < 0].copy()
+df_consumo["quantidade"] = df_consumo["quantidade"].abs()
+
+# =========================
+# 📊 ÚLTIMO MÊS FECHADO
 # =========================
 ano_ult = hoje.year if hoje.month > 1 else hoje.year - 1
 mes_ult = hoje.month - 1 if hoje.month > 1 else 12
 
-df_ult = df[(df["ano"] == ano_ult) & (df["mes"] == mes_ult)]
+df_ult = df_consumo[
+    (df_consumo["ano"] == ano_ult) &
+    (df_consumo["mes"] == mes_ult)
+]
 
 total_ult = df_ult["quantidade"].sum()
 media_ult = total_ult / 31
@@ -163,20 +174,20 @@ media_ult = total_ult / 31
 # =========================
 # 📊 TRIMESTRE E SEMESTRE
 # =========================
-df_tri = df[df["data"] >= pd.Timestamp(hoje) - pd.DateOffset(months=3)]
+df_tri = df_consumo[df_consumo["data"] >= pd.Timestamp(hoje) - pd.DateOffset(months=3)]
 media_tri = df_tri["quantidade"].sum() / 3
 
-df_sem = df[df["data"] >= pd.Timestamp(hoje) - pd.DateOffset(months=6)]
+df_sem = df_consumo[df_consumo["data"] >= pd.Timestamp(hoje) - pd.DateOffset(months=6)]
 media_sem = df_sem["quantidade"].sum() / 6
 
 # =========================
 # 📊 ANUAL
 # =========================
-anos = sorted(df["ano"].unique())
+anos = sorted(df_consumo["ano"].unique())
 medias_anos = {}
 
 for a in anos:
-    df_a = df[df["ano"] == a]
+    df_a = df_consumo[df_consumo["ano"] == a]
     medias_anos[a] = df_a["quantidade"].sum() / 12
 
 # =========================
