@@ -32,12 +32,12 @@ subcategoria = st.sidebar.selectbox(
 st.subheader(f"📌 {familia} → {subcategoria}")
 
 # =========================
-# 📌 FORMATAÇÃO
+# 📌 FORMATAÇÃO (PADRÃO ERP)
 # =========================
-def fmt(v):
-    if pd.isna(v):
+def fmt_br(valor):
+    if pd.isna(valor):
         return "0,000"
-    return f"{v:,.3f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"{valor:,.3f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 # =========================
 # 🚨 TELA CERTA
@@ -186,48 +186,32 @@ st.markdown("### 📊 Consumo Médio")
 
 k1, k2, k3, k4 = st.columns(4)
 
-k1.metric("Ano", fmt(abs(media_ano)))
-k2.metric("Semestre", fmt(abs(media_sem)))
-k3.metric("Trimestre", fmt(abs(media_tri)))
-k4.metric("Último mês", fmt(abs(media_ult)))
+k1.metric("Ano", fmt_br(abs(media_ano)))
+k2.metric("Semestre", fmt_br(abs(media_sem)))
+k3.metric("Trimestre", fmt_br(abs(media_tri)))
+k4.metric("Último mês", fmt_br(abs(media_ult)))
 
 # =========================
-# 📊 COMPARAÇÃO ANUAL (NOVO)
+# 📊 EVOLUÇÃO ANUAL (SIMPLIFICADA)
 # =========================
-st.markdown("### 📊 Comparação Anual (Atual vs Anterior)")
+st.markdown("### 📊 Consumo Médio por Ano (Regra Fixa)")
 
 df_anos = df_consumo.groupby("ano")["quantidade"].sum().reset_index()
-df_anos = df_anos.sort_values("ano")
+df_anos = df_anos.sort_values("ano", ascending=False)
 
-if len(df_anos) >= 2:
-    ano_atual = df_anos.iloc[-1]
-    ano_anterior = df_anos.iloc[-2]
+if df_anos.empty:
+    st.info("Sem dados para exibir")
+    st.stop()
 
-    atual = ano_atual["quantidade"]
-    anterior = ano_anterior["quantidade"]
+for _, row in df_anos.iterrows():
+    ano = int(row["ano"])
+    total = row["quantidade"]
 
-    variacao = ((atual - anterior) / anterior * 100) if anterior != 0 else 0
-
-    seta = "↑" if variacao > 0 else "↓" if variacao < 0 else "→"
+    media = total / 12
+    media_dia = media / 31
 
     c1, c2, c3 = st.columns(3)
 
-    c1.metric(
-        "Ano Atual",
-        f"{int(ano_atual['ano'])}",
-        f"{atual:,.0f}"
-    )
-
-    c2.metric(
-        "Ano Anterior",
-        f"{int(ano_anterior['ano'])}",
-        f"{anterior:,.0f}"
-    )
-
-    c3.metric(
-        "Variação",
-        f"{seta} {variacao:.2f}%",
-        delta=f"{atual - anterior:,.0f}"
-    )
-else:
-    st.info("Dados insuficientes para comparação anual")
+    c1.metric("Ano", ano)
+    c2.metric("Total", fmt_br(total))
+    c3.metric("Média diária", fmt_br(media_dia))
