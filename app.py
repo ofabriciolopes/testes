@@ -101,67 +101,21 @@ df = df.dropna(subset=["data"])
 df["quantidade"] = pd.to_numeric(df["quantidade"], errors="coerce")
 df = df.dropna(subset=["quantidade"])
 
-df["ano"] = df["data"].dt.year
-df["mes"] = df["data"].dt.month
-
 # =========================
-# 🎯 FILTROS
+# 📊 BASE DE CONSUMO
 # =========================
-st.markdown("### 🎯 Filtros")
-
-def mult(col, label):
-    if col and col in df.columns:
-        valores = sorted(df[col].astype(str).dropna().unique())
-
-        selecionados = st.multiselect(
-            label,
-            options=valores,
-            default=None,
-            placeholder=f"Selecionar {label}"
-        )
-
-        if len(selecionados) == 0:
-            return pd.Series([True] * len(df))
-
-        return df[col].astype(str).isin(selecionados)
-
-    return pd.Series([True] * len(df))
-
-c1, c2, c3, c4 = st.columns(4)
-
-with c1:
-    f_material = mult("material", "Material")
-
-with c2:
-    f_centro = mult("centro", "Centro")
-
-with c3:
-    f_deposito = mult("deposito", "Depósito")
-
-with c4:
-    f_movimento = mult("movimento", "Tipo de movimento")
-
-df = df[f_material & f_centro & f_deposito & f_movimento]
-
-# =========================
-# 📊 BASE
-# =========================
-hoje = datetime.today()
-
 df_consumo = df[df["quantidade"] < 0].copy()
 df_consumo["quantidade"] = df_consumo["quantidade"].abs()
 
 # =========================
-# 📊 KPIs
+# 📊 KPIs (mantido simples)
 # =========================
 st.markdown("### 📊 Consumo Médio")
 
-df_ano_base = df_consumo.copy()
-
-media_ult = df_ano_base["quantidade"].sum() / 31
-media_tri = df_ano_base["quantidade"].sum() / 3 / 31
-media_sem = df_ano_base["quantidade"].sum() / 6 / 31
-media_ano = df_ano_base["quantidade"].sum() / 12 / 31
+media_ult = df_consumo["quantidade"].sum() / 31
+media_tri = df_consumo["quantidade"].sum() / 3 / 31
+media_sem = df_consumo["quantidade"].sum() / 6 / 31
+media_ano = df_consumo["quantidade"].sum() / 12 / 31
 
 k1, k2, k3, k4 = st.columns(4)
 
@@ -171,35 +125,42 @@ k3.metric("Trimestre", fmt_br(media_tri))
 k4.metric("Último mês", fmt_br(media_ult))
 
 # =========================
-# 📊 ANOS FECHADOS (REGRA FINAL)
+# 📊 ANOS FECHADOS (PERÍODO REAL)
 # =========================
-st.markdown("### 📊 Consumo Médio por Ano (Regra Final)")
+st.markdown("### 📊 Consumo Médio por Ano (Período Real)")
 
 ano_atual = datetime.today().year
 
-df_anos = df.copy()
-df_anos = df_anos[df_anos["ano"] < ano_atual]
+df_anos = df_consumo[df_consumo["data"].dt.year < ano_atual]
 
-df_anos = df_anos.groupby("ano")["quantidade"].sum().reset_index()
-df_anos = df_anos.sort_values("ano", ascending=False)
+anos = sorted(df_anos["data"].dt.year.unique(), reverse=True)
 
-if df_anos.empty:
+if len(anos) == 0:
     st.info("Sem anos fechados para exibir")
     st.stop()
 
-for _, row in df_anos.iterrows():
-    ano = int(row["ano"])
-    total = row["quantidade"]
+for ano in anos:
+    df_ano = df_anos[df_anos["data"].dt.year == ano]
+
+    inicio = df_ano["data"].min()
+    fim = df_ano["data"].max()
+
+    total = df_ano["quantidade"].sum()
 
     media_mensal = total / 12
     media_diaria = media_mensal / 31
 
-    # ABS somente no final (visual)
+    # ABS só no final (visual)
     total = abs(total)
     media_diaria = abs(media_diaria)
 
     c1, c2, c3 = st.columns(3)
 
-    c1.metric("Ano", ano)
+    c1.metric(
+        "Ano",
+        f"{ano}\n{inicio.date()} → {fim.date()}"
+    )
+
     c2.metric("Total", fmt_br(total))
+
     c3.metric("Média diária (12 → 31)", fmt_br(media_diaria))
