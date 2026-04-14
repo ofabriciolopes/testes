@@ -28,30 +28,21 @@ categoria = st.sidebar.selectbox(
 )
 
 # =========================
-# 📂 SUBCATEGORIA DINÂMICA
+# 📂 SUBCATEGORIA
 # =========================
 subcategorias = {
     "Matex": ["Médias", "Consumo", "Estoque"],
-    "Ingrediente": ["Em breve"],
-    "Negro de Fumo": ["Em breve"],
-    "Borracha": ["Em breve"],
-    "Tecido": ["Em breve"],
-    "Cordinha": ["Em breve"],
-    "Importação": ["Em breve"],
-    "Exportação": ["Em breve"],
-    "Feira de Santana": ["Em breve"],
-    "Barueri": ["Em breve"]
 }
 
 subcategoria = st.sidebar.selectbox(
     "Subcategoria",
-    subcategorias[categoria]
+    subcategorias.get(categoria, ["Em breve"])
 )
 
 st.subheader(f"📌 {categoria} → {subcategoria}")
 
 # =========================
-# 📌 REGRA: SÓ EXECUTA SE FOR MATEX + MÉDIAS
+# 📌 MATEX → MÉDIAS
 # =========================
 if categoria == "Matex" and subcategoria == "Médias":
 
@@ -68,12 +59,15 @@ if categoria == "Matex" and subcategoria == "Médias":
         # Detectar colunas
         coluna_data = None
         coluna_qtd = None
+        coluna_material = None
 
         for col in df.columns:
             if 'data' in col:
                 coluna_data = col
             if 'quant' in col or 'qtd' in col:
                 coluna_qtd = col
+            if 'material' in col:
+                coluna_material = col
 
         if coluna_data is None or coluna_qtd is None:
             st.error("❌ Não encontrei colunas de data ou quantidade")
@@ -84,6 +78,9 @@ if categoria == "Matex" and subcategoria == "Médias":
             coluna_qtd: 'quantidade'
         })
 
+        if coluna_material:
+            df = df.rename(columns={coluna_material: 'material'})
+
         # =========================
         # 📅 TRATAR DADOS
         # =========================
@@ -93,32 +90,59 @@ if categoria == "Matex" and subcategoria == "Médias":
         df['quantidade'] = pd.to_numeric(df['quantidade'], errors='coerce')
         df = df.dropna(subset=['quantidade'])
 
-        # 🔢 POSITIVO
         df['quantidade'] = df['quantidade'].abs()
 
-        # =========================
-        # 📆 COLUNAS
-        # =========================
         df['ano'] = df['data'].dt.year
         df['mes'] = df['data'].dt.month
 
+        # =========================
+        # 🎯 FILTROS
+        # =========================
+        st.sidebar.markdown("## 🎯 Filtros")
+
+        # 📦 Filtro Material
+        if 'material' in df.columns:
+            materiais = sorted(df['material'].dropna().unique())
+            material_sel = st.sidebar.multiselect(
+                "Material",
+                materiais,
+                default=materiais
+            )
+            df = df[df['material'].isin(material_sel)]
+
+        # 📅 Filtro Ano
+        anos = sorted(df['ano'].unique())
+        ano_sel = st.sidebar.multiselect(
+            "Ano",
+            anos,
+            default=anos
+        )
+        df = df[df['ano'].isin(ano_sel)]
+
+        # 📆 Filtro Mês
+        meses = sorted(df['mes'].unique())
+        mes_sel = st.sidebar.multiselect(
+            "Mês",
+            meses,
+            default=meses
+        )
+        df = df[df['mes'].isin(mes_sel)]
+
+        # =========================
+        # 📊 CÁLCULOS
+        # =========================
         hoje = datetime.today()
         ano_atual = hoje.year
         mes_atual = hoje.month
 
-        # =========================
-        # 📊 MÉDIA MÊS CORRENTE
-        # =========================
+        # Mês corrente
         df_mes_corrente = df[
             (df['ano'] == ano_atual) &
             (df['mes'] == mes_atual)
         ]
-
         media_mes_corrente = df_mes_corrente['quantidade'].mean()
 
-        # =========================
-        # 📊 ÚLTIMO MÊS COMPLETO
-        # =========================
+        # Último mês completo
         if mes_atual == 1:
             ultimo_mes = 12
             ano_ultimo_mes = ano_atual - 1
@@ -130,7 +154,6 @@ if categoria == "Matex" and subcategoria == "Médias":
             (df['ano'] == ano_ultimo_mes) &
             (df['mes'] == ultimo_mes)
         ]
-
         media_ultimo_mes = df_ultimo_mes['quantidade'].mean()
 
         # =========================
@@ -138,21 +161,13 @@ if categoria == "Matex" and subcategoria == "Médias":
         # =========================
         col1, col2 = st.columns(2)
 
-        col1.metric("Média mês corrente", f"{media_mes_corrente:,.2f}")
-        col2.metric("Último mês completo", f"{media_ultimo_mes:,.2f}")
+        col1.metric("📅 Média mês corrente", f"{media_mes_corrente:,.2f}")
+        col2.metric("📆 Último mês completo", f"{media_ultimo_mes:,.2f}")
 
         # =========================
         # 📋 TABELA
         # =========================
         df_group = df.groupby(['ano', 'mes'])['quantidade'].mean().reset_index()
 
+        st.markdown("### 📋 Média por Mês")
         st.dataframe(df_group, use_container_width=True)
-
-# =========================
-# 📌 OUTRAS TELAS (FUTURO)
-# =========================
-elif categoria == "Matex":
-    st.info("🚧 Essa subcategoria ainda será desenvolvida.")
-
-else:
-    st.info("🚧 Categoria ainda não implementada.")
