@@ -148,14 +148,11 @@ df = df[f_material & f_centro & f_deposito & f_movimento]
 # =========================
 hoje = datetime.today()
 
-# =========================
-# 📊 CONSUMO REAL (SAÍDAS)
-# =========================
 df_consumo = df[df["quantidade"] < 0].copy()
 df_consumo["quantidade"] = df_consumo["quantidade"].abs()
 
 # =========================
-# 📊 ÚLTIMO MÊS FECHADO
+# 📊 ÚLTIMO MÊS (FIXO 31)
 # =========================
 ano_ult = hoje.year if hoje.month > 1 else hoje.year - 1
 mes_ult = hoje.month - 1 if hoje.month > 1 else 12
@@ -165,38 +162,34 @@ df_ult = df[
     (df["mes"] == mes_ult)
 ]
 
-total_ult = df_ult["quantidade"].sum()
-media_ult = total_ult / 31
+media_ult = df_ult["quantidade"].sum() / 31
 
 # =========================
-# 📊 TRIMESTRE
+# 📊 TRIMESTRE (3M / 31)
 # =========================
 df_tri = df_consumo[
     df_consumo["data"] >= pd.Timestamp(hoje).to_period("M").to_timestamp() - pd.DateOffset(months=3)
 ]
 
-media_tri = df_tri["quantidade"].sum() / 3
+media_tri = df_tri["quantidade"].sum() / (3 * 31)
 
 # =========================
-# 📊 SEMESTRE (CORRIGIDO)
+# 📊 SEMESTRE (6M / 31)
 # =========================
 df_sem = df_consumo[
     df_consumo["data"] >= pd.Timestamp(hoje).to_period("M").to_timestamp() - pd.DateOffset(months=6)
 ]
 
-total_sem = df_sem["quantidade"].sum()
-media_sem = total_sem / (6 * 31)
+media_sem = df_sem["quantidade"].sum() / (6 * 31)
 
 # =========================
-# 📊 ANUAL
+# 📊 ANO (12M / 31)
 # =========================
-anos = sorted(df_consumo["ano"].unique())
-medias_anos = {}
+df_ano = df_consumo[
+    df_consumo["data"] >= pd.Timestamp(hoje).to_period("M").to_timestamp() - pd.DateOffset(months=12)
+]
 
-for a in anos:
-    df_a = df_consumo[df_consumo["ano"] == a]
-    meses_validos = df_a["mes"].nunique()
-    medias_anos[a] = df_a["quantidade"].sum() / meses_validos if meses_validos else 0
+media_ano = df_ano["quantidade"].sum() / (12 * 31)
 
 # =========================
 # 📊 KPIs
@@ -205,7 +198,7 @@ st.markdown("### 📊 Consumo Médio")
 
 k1, k2, k3, k4 = st.columns(4)
 
-k1.metric("Ano", fmt(medias_anos.get(hoje.year, 0)))
+k1.metric("Ano", fmt(abs(media_ano)))
 k2.metric("Semestre", fmt(abs(media_sem)))
 k3.metric("Trimestre", fmt(abs(media_tri)))
 k4.metric("Último mês", fmt(abs(media_ult)))
@@ -213,14 +206,12 @@ k4.metric("Último mês", fmt(abs(media_ult)))
 # =========================
 # 📅 TABELA ANUAL
 # =========================
-st.markdown("### 📅 Médias por Ano")
+st.markdown("### 📅 (Opcional) Dados Anuais")
 
-df_anos = pd.DataFrame({
-    "Ano": list(medias_anos.keys()),
-    "Consumo médio": list(medias_anos.values())
-}).sort_values("Ano")
+df_anos = df_consumo.groupby("ano")["quantidade"].sum().reset_index()
+df_anos["media"] = df_anos["quantidade"] / (12 * 31)
 
 st.dataframe(
-    df_anos.style.format({"Consumo médio": "{:,.3f}"}),
+    df_anos[["ano", "media"]].style.format({"media": "{:,.3f}"}),
     use_container_width=True
 )
