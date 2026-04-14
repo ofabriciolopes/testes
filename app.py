@@ -166,18 +166,26 @@ df_ult = df[
 ]
 
 total_ult = df_ult["quantidade"].sum()
-
-# média fixa por 31 dias
 media_ult = total_ult / 31
 
 # =========================
-# 📊 TRIMESTRE E SEMESTRE
+# 📊 TRIMESTRE
 # =========================
-df_tri = df_consumo[df_consumo["data"] >= pd.Timestamp(hoje).to_period("M").to_timestamp() - pd.DateOffset(months=3)]
+df_tri = df_consumo[
+    df_consumo["data"] >= pd.Timestamp(hoje).to_period("M").to_timestamp() - pd.DateOffset(months=3)
+]
+
 media_tri = df_tri["quantidade"].sum() / 3
 
-df_sem = df_consumo[df_consumo["data"] >= pd.Timestamp(hoje).to_period("M").to_timestamp() - pd.DateOffset(months=6)]
-media_sem = df_sem["quantidade"].sum() / 6
+# =========================
+# 📊 SEMESTRE (CORRIGIDO)
+# =========================
+df_sem = df_consumo[
+    df_consumo["data"] >= pd.Timestamp(hoje).to_period("M").to_timestamp() - pd.DateOffset(months=6)
+]
+
+total_sem = df_sem["quantidade"].sum()
+media_sem = total_sem / (6 * 31)
 
 # =========================
 # 📊 ANUAL
