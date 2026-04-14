@@ -192,20 +192,42 @@ k3.metric("Trimestre", fmt(abs(media_tri)))
 k4.metric("Último mês", fmt(abs(media_ult)))
 
 # =========================
-# 📊 VISUAL ANUAL (UX MELHORADO)
+# 📊 COMPARAÇÃO ANUAL (NOVO)
 # =========================
-st.markdown("### 📊 Evolução Anual (Dashboard)")
+st.markdown("### 📊 Comparação Anual (Atual vs Anterior)")
 
 df_anos = df_consumo.groupby("ano")["quantidade"].sum().reset_index()
-df_anos["media"] = df_anos["quantidade"] / (12 * 31)
+df_anos = df_anos.sort_values("ano")
 
-df_anos = df_anos.sort_values("ano", ascending=False)
+if len(df_anos) >= 2:
+    ano_atual = df_anos.iloc[-1]
+    ano_anterior = df_anos.iloc[-2]
 
-cols = st.columns(len(df_anos))
+    atual = ano_atual["quantidade"]
+    anterior = ano_anterior["quantidade"]
 
-for i, (_, row) in enumerate(df_anos.iterrows()):
-    with cols[i]:
-        st.metric(
-            label=f"{row['ano']}",
-            value=f"{row['media']:.3f}"
-        )
+    variacao = ((atual - anterior) / anterior * 100) if anterior != 0 else 0
+
+    seta = "↑" if variacao > 0 else "↓" if variacao < 0 else "→"
+
+    c1, c2, c3 = st.columns(3)
+
+    c1.metric(
+        "Ano Atual",
+        f"{int(ano_atual['ano'])}",
+        f"{atual:,.0f}"
+    )
+
+    c2.metric(
+        "Ano Anterior",
+        f"{int(ano_anterior['ano'])}",
+        f"{anterior:,.0f}"
+    )
+
+    c3.metric(
+        "Variação",
+        f"{seta} {variacao:.2f}%",
+        delta=f"{atual - anterior:,.0f}"
+    )
+else:
+    st.info("Dados insuficientes para comparação anual")
